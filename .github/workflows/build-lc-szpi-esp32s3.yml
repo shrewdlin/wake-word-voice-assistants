@@ -1,5 +1,5 @@
 # 工作流名称
-name: build lc-esp32s3 ESPHome
+name: build lc-szpi-esp32s3 ESPHome
 
 # 触发条件
 on:

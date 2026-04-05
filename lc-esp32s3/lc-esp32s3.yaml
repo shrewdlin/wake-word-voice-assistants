@@ -1,7 +1,7 @@
 ---
 substitutions:
-  name: eetree_ai
-  friendly_name: eetree_ai
+  name: lc-esp32s3
+  friendly_name: lc-esp32s3
   
   # 仅有2种颜色
   bg_color: "000000"    # 黑色背景
@@ -44,7 +44,7 @@ esphome:
             - script.execute: draw_display
 
 esp32:
-  board: seeed_xiao_esp32s3
+  variant: esp32s3
   flash_size: 8MB
   cpu_frequency: 240MHz
   framework:
@@ -105,103 +105,39 @@ binary_sensor:
         then:
           - button.press: factory_reset_btn
 
-# 传感器
-sensor:
-  # DHT11
-  - platform: dht
-    pin: GPIO3
-    model: DHT11
-    temperature:
-      name: "DHT11 Temperature"
-    humidity:
-      name: "DHT11 Humidity"
-    update_interval: 60s
-  # 四位模拟按键（只用 A / B）失败
-
-
-# 绿灯黄灯
-output:
-  - platform: gpio
-    pin: GPIO43
-    id: green_led
-
-  - platform: gpio
-    pin: GPIO44
-    id: yellow_led
-
-light:
-  # 绿灯
-  - platform: binary
-    id: green_light
-    name: "Green Light"
-    output: green_led
-    restore_mode: ALWAYS_OFF
-  # 黄灯
-  - platform: binary
-    id: yellow_light
-    name: "Yellow Light"
-    output: yellow_led
-    restore_mode: ALWAYS_OFF
-  # WS2812灯带
-  - platform: esp32_rmt_led_strip
-    id: ws2812_strip
-    name: "WS2812 Strip"
-    pin: GPIO2
-    num_leds: 10
-    chipset: WS2812
-    rgb_order: GRB
-    restore_mode: ALWAYS_OFF
-    effects:
-      # Listening 灯效：白色呼吸
-      - pulse:
-          name: "Listening Breathing"
-          transition_length: 1.2s
-          update_interval: 1.2s
-          min_brightness: 5%
-          max_brightness: 30%
-      #  Thinking 灯效：蓝色扫描
-      - addressable_scan:
-          name: "Thinking Scan"
-          move_interval: 80ms
-          scan_width: 2
-      # Replying 灯效：语音律动
-      - random:
-          name: "Replying Voice Pulse"
-          transition_length: 150ms
-          update_interval: 120ms
-
-# I2C总线 (OLED)
+# I2C 总线
 i2c:
-  id: i2c_bus
-  scl: GPIO6
-  sda: GPIO5
+  - id: i2c_bus
+    scl: GPIO42
+    sda: GPIO41
 
-# 定义 I2S 音频总线
+# I2S 音频总线
 i2s_audio:
   - id: i2s_mic
-    i2s_lrclk_pin: GPIO42   # PDM_CLK
+    i2s_lrclk_pin: GPIO17    # ← WS
+    i2s_bclk_pin: GPIO16     # ← SCK
   - id: i2s_out_bus
-    i2s_lrclk_pin: GPIO7    # ← LRC / WS
-    i2s_bclk_pin: GPIO8     # ← BCLK
+    i2s_lrclk_pin: GPIO40    # ← LRC / WS
+    i2s_bclk_pin: GPIO39     # ← BCLK
 
-# 定义 PDM 麦克风
+# INMP441
 microphone:
   - platform: i2s_audio
     id: box_mic
     i2s_audio_id: i2s_mic
     adc_type: external
-    i2s_din_pin: GPIO41     # PDM DATA
-    pdm: true
+    i2s_din_pin: GPIO18     # SD
+    pdm: false
     sample_rate: 16000
-    bits_per_sample: 16bit
-    channel: left
+    bits_per_sample: 32bit
+    channel: left           # 声道 (L/R接GND=left, 接VCC=right)
 
-# 定义 MAX 98357A
+# MAX 98357A
 speaker:
   - platform: i2s_audio
     id: box_speaker
     i2s_audio_id: i2s_out_bus
-    i2s_dout_pin: GPIO9
+    i2s_dout_pin: GPIO38
     dac_type: external
     sample_rate: 16000
     bits_per_sample: 16bit
@@ -257,12 +193,11 @@ media_player:
             - script.execute: set_idle_or_mute_phase
             - script.execute: draw_display
 
-# 设备端唤醒词引擎 (microWakeWord)，使用 "okay_nabu" 模型
+# 设备端唤醒词引擎 (microWakeWord)
 micro_wake_word:
   id: mww
   models:
     - okay_nabu
-    - hey_jarvis
   on_wake_word_detected:
     - voice_assistant.start:
         wake_word: !lambda return wake_word;
@@ -277,7 +212,6 @@ voice_assistant:
   auto_gain: 31dBFS
   volume_multiplier: 2.0
   # 定义了语音助手各个生命周期事件的回调，如开始监听、结束监听、开始播放TTS等。
-  # 在这些回调中，会更新屏幕显示状态、发布文本传感器值等。
   on_listening:
     - lambda: id(voice_assistant_phase) = ${voice_assist_listening_phase_id};
     - text_sensor.template.publish:
@@ -287,23 +221,11 @@ voice_assistant:
         id: text_response
         state: "..."
     - script.execute: draw_display
-    # Listening 灯效：白色呼吸
-    - light.turn_on:
-        id: ws2812_strip
-        effect: "Listening Breathing"
-        red: 50%
-        green: 50%
-        blue: 50%
+
   on_stt_vad_end:
     - lambda: id(voice_assistant_phase) = ${voice_assist_thinking_phase_id};
     - script.execute: draw_display
-    # Thinking 灯效：蓝色扫描
-    - light.turn_on:
-        id: ws2812_strip
-        effect: "Thinking Scan"
-        red: 0%
-        green: 10%
-        blue: 30%
+
   on_stt_end:
     - text_sensor.template.publish:
         id: text_request
@@ -315,13 +237,7 @@ voice_assistant:
         state: !lambda return x;
     - lambda: id(voice_assistant_phase) = ${voice_assist_replying_phase_id};
     - script.execute: draw_display
-    # Replying 灯效：语音律动
-    - light.turn_on:
-        id: ws2812_strip
-        effect: "Replying Voice Pulse"
-        red: 20%
-        green: 0%
-        blue: 30%
+
   on_end:
     # 短暂等待，以确认是否有播报开始
     - wait_until:
@@ -565,14 +481,10 @@ script:
             switch.is_off: mute
           then:
             - lambda: id(voice_assistant_phase) = ${voice_assist_idle_phase_id};
-            # Idle 灯直接关
-            - light.turn_off:
-                id: ws2812_strip
+
           else:
             - lambda: id(voice_assistant_phase) = ${voice_assist_muted_phase_id};
-            # 静音：灯直接关
-            - light.turn_off:
-                id: ws2812_strip
+
 
 # 开关 (Switches)
 switch:
@@ -604,7 +516,7 @@ switch:
             - media_player.speaker.play_on_device_media_file:
                 media_file: timer_finished_sound
                 announcement: true
-            - delay: 1s   # 两次铃声之间的间隔，可调
+            - delay: 1s   # 两次铃声之间的间隔
       - switch.turn_off: timer_ringing
 
     on_turn_off:
@@ -684,16 +596,6 @@ globals:
   - id: global_is_timer
     type: bool
     restore_value: false
-  # 按键状态，0 = 无按键，1 = A键，2 = B键
-  - id: key_state
-    type: int
-    restore_value: false
-    initial_value: "0"
-    # 按键状态last
-  - id: last_key_state
-    type: int
-    restore_value: false
-    initial_value: "0"
 
 # 字体 (Fonts)
 font:
@@ -702,7 +604,7 @@ font:
       family: "Noto Sans SC"
       weight: 400
       italic: false
-    id: font_main  # 用于显示用户请求文本
+    id: font_main  # 标题
     size: 14
     glyphs: ${allowed_characters}
     ignore_missing_glyphs: true
@@ -710,33 +612,18 @@ font:
       type: gfonts
       family: "Noto Sans SC"
       weight: 400
-    id: font_small
-    size: 12
+    id: font_small  # 正文
+    size: 10
     glyphs: ${allowed_characters}
     ignore_missing_glyphs: true
 
 # 文本传感器 (Text Sensors): 用于在UI中显示请求和回复的文本
-# 包含了截断过长文本的逻辑
 text_sensor:
   - id: text_request
     platform: template
-    on_value:
-      lambda: |-
-        if(id(text_request).state.length()>20) {
-          std::string name = id(text_request).state.c_str();
-          std::string truncated = esphome::str_truncate(name.c_str(),19);
-          id(text_request).state = (truncated+"...").c_str();
-        }
 
   - id: text_response
     platform: template
-    on_value:
-      lambda: |-
-        if(id(text_response).state.length()>20) {
-          std::string name = id(text_response).state.c_str();
-          std::string truncated = esphome::str_truncate(name.c_str(),19);
-          id(text_response).state = (truncated+"...").c_str();
-        }
 
 # 颜色定义 (Colors): 将HEX颜色值定义为ID，方便在显示逻辑中引用
 color:
@@ -750,6 +637,7 @@ display:
   - platform: ssd1306_i2c
     id: oled128
     model: "SSD1306 128x64"
+    i2c_id: i2c_bus
     address: 0x3C
     update_interval: never
     # 定义了多个显示页面，每个页面是一个独立的绘制函数
@@ -758,7 +646,7 @@ display:
       - id: idle_page
         lambda: |-
           it.fill(id(bg_color));
-          it.printf(30, 20, id(font_main), id(text_color), "%s", "待命状态");
+          it.printf(30, 20, id(font_main), id(text_color), "%s", "待机状态");
           id(draw_active_timer_widget).execute();
       # 监听页面
       - id: listening_page
@@ -770,17 +658,79 @@ display:
       - id: thinking_page
         lambda: |-
           it.fill(id(bg_color));
-          it.printf(30, 0, id(font_main), id(text_color), "%s", "思考状态");
-          it.rectangle(0 , 20 , 126 , 25 , Color::WHITE );
-          it.printf(5, 22, id(font_main), Color::WHITE, "%s", id(text_request).state.c_str());
+          it.printf(0, 0, id(font_main), id(text_color), "%s", "思考:");
+          const int start_y = 16;
+          const int line_height = 12;
+          const int max_width = 128;
+          std::string text = id(text_request).state.c_str();
+          int y = start_y;
+          std::string line;
+          for (size_t i = 0; i < text.size() && y < 64;) {
+            uint8_t c = text[i];
+            int len =
+              (c & 0x80) == 0x00 ? 1 :
+              (c & 0xE0) == 0xC0 ? 2 :
+              (c & 0xF0) == 0xE0 ? 3 : 4;
+            std::string next = line + text.substr(i, len);
+            int x1, y1, w, h;
+            it.get_text_bounds(
+              0, y,
+              next.c_str(),
+              id(font_small),
+              esphome::display::TextAlign::TOP_LEFT,
+              &x1, &y1, &w, &h
+            );
+            if (w > max_width) {
+              it.printf(0, y, id(font_small), id(text_color), "%s", line.c_str());
+              y += line_height;
+              line.clear();
+            } else {
+              line = next;
+              i += len;
+            }
+          }
+          if (!line.empty() && y < 64) {
+            it.printf(0, y, id(font_small), id(text_color), "%s", line.c_str());
+          }
           id(draw_active_timer_widget).execute();
       # 回复页面
       - id: replying_page
         lambda: |-
           it.fill(id(bg_color));
-          it.printf(30, 1, id(font_main), id(text_color), "%s", "回复状态");
-          it.rectangle(1 , 20 , 126 , 25 , Color::WHITE );
-          it.printf(5, 22, id(font_main), Color::WHITE, "%s", id(text_response).state.c_str());
+          it.printf(0, 0, id(font_main), id(text_color), "%s", "回复:");
+          const int start_y = 16;
+          const int line_height = 12;
+          const int max_width = 128;
+          std::string text = id(text_response).state.c_str();
+          int y = start_y;
+          std::string line;
+          for (size_t i = 0; i < text.size() && y < 64;) {
+            uint8_t c = text[i];
+            int len =
+              (c & 0x80) == 0x00 ? 1 :
+              (c & 0xE0) == 0xC0 ? 2 :
+              (c & 0xF0) == 0xE0 ? 3 : 4;
+            std::string next = line + text.substr(i, len);
+            int x1, y1, w, h;
+            it.get_text_bounds(
+              0, y,
+              next.c_str(),
+              id(font_small),
+              esphome::display::TextAlign::TOP_LEFT,
+              &x1, &y1, &w, &h
+            );
+            if (w > max_width) {
+              it.printf(0, y, id(font_small), id(text_color), "%s", line.c_str());
+              y += line_height;
+              line.clear();
+            } else {
+              line = next;
+              i += len;
+            }
+          }
+          if (!line.empty() && y < 64) {
+            it.printf(0, y, id(font_small), id(text_color), "%s", line.c_str());
+          }
           id(draw_active_timer_widget).execute();
       # 定时器结束页面
       - id: timer_finished_page

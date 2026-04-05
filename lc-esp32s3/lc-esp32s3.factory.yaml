@@ -7,23 +7,20 @@ packages:
       on_client_connected:
         - wait_until: # 等待直到蓝牙（BLE）被禁用
             not: ble.enabled
-  # 引入主配置文件，该文件包含了xiao-musicbox设备的完整配置
-  xiao-esp32s3: !include xiao-musicbox.yaml
+  # 引入主配置文件，该文件包含了lc-esp32s3设备的完整配置
+  lc-esp32s3: !include lc-esp32s3.yaml
 
 esphome:
   project:
-    name: esphome.musicbox # 项目名称
+    name: esphome.voice-assistant # 项目名称
     version: dev # 版本号
 
 ota:
-  - platform: http_request # OTA 更新平台
-    id: ota_http_request
-
-http_request: # HTTP 请求组件配置
+  - platform: esphome
 
 # 从 GitHub 导入包
 dashboard_import:
-  package_import_url: github://pysn2012/wake-word-voice-assistants/xiao-musicbox/xiao-musicbox.yaml@main
+  package_import_url: github://pysn2012/wake-word-voice-assistants/lc-esp32s3/lc-esp32s3.yaml@main
 
 wifi:
   # 当 WiFi 连接成功后执行

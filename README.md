@@ -11,7 +11,7 @@
 本仓库基于 ESPHome 官方语音助手仓库扩展开发：
 
 - 官方原仓库：[esphome/wake-word-voice-assistants](https://github.com/esphome/wake-word-voice-assistants)
-- 扩展适配：新增对 unihiker-k10（行空板 K10）、立创实战派 ESP32S3 开发板的支持
+- 扩展适配：新增对 unihiker-k10（行空板 K10）、立创实战派 ESP32S3 开发板、SEEED XIAO ESP32S3SENSE的支持
 - 功能优化：为 ESP32-S3-BOX-3 开发板增加中文字体显示支持
 
 #### 2、编译固件
